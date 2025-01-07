@@ -12,7 +12,8 @@ from api_funcs import (
     get_real_time_losers, 
     get_news, 
     get_sa_articles, 
-    get_analysis
+    get_analysis,
+    get_quotes
 )
 
 load_dotenv()
@@ -198,6 +199,37 @@ async def remove(ctx, ticker_id=None):
     except IOError:
         await ctx.send("Error accessing portfolio file")
         return
+
+@bot.command(name='check')
+async def check(ctx):
+    tickers = []
+    portfolio_data = {}
+    with open('portfolio.csv', 'r', newline='') as file:
+        reader = csv.reader(file)
+        for row in reader:
+            tickers.append(row[0])
+            portfolio_data[row[0]] = {
+                'avg_cost': float(row[1]),
+                'quantity': int(row[2])
+            }
+    if not tickers:
+        await ctx.send("No tickers found in portfolio")
+        return
+    
+    ticker_str = ','.join(tickers)
+    quotes = get_quotes(ticker_str)
+    for quote in quotes:
+        stock_avg_cost = portfolio_data[quote['symbol']]['avg_cost']
+        stock_current_price = quote['price']
+        stock_quantity = portfolio_data[quote['symbol']]['quantity']
+
+        response = f" {stock_quantity}x {quote['symbol']}: ${stock_avg_cost} -> ${stock_current_price}\n"
+        response += f"equity:   ${stock_quantity * stock_avg_cost} -> ${stock_quantity * stock_current_price} = ${stock_quantity * (stock_current_price - stock_avg_cost)}\n"
+        response += f"PE: {quote['trailing_pe']} -> {quote['forward_pe']}\n"
+        response += f"Market Cap: ${quote['market_cap']:,.2f}\n"
+        response += f"52W low/high: {quote['52_week_low']} , {quote['52_week_high']}\n"
+        response += f"-----------------------------------\n"
+        await ctx.send(response)
 
 @tasks.loop(time=datetime.time(hour=4,tzinfo=pytz.timezone('US/Eastern')) )
 async def daily_update():

@@ -266,3 +266,40 @@ def get_real_time_losers():
         })
 
     return real_time_losers, losers_news
+
+def get_quotes(tickers):
+    url = "https://apidojo-yahoo-finance-v1.p.rapidapi.com/market/v2/get-quotes"
+
+    querystring = {
+        "symbols": tickers,
+        "region": "US",
+    }
+
+    headers = {
+        "Accept": "application/json",
+        "x-rapidapi-ua": "RapidAPI-Playground",
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+    data = response.json()
+
+    results = data['quoteResponse']['result']
+    quotes = []
+
+    for quote in results:
+        if 'regularMarketPrice' not in quote:
+            continue
+        quotes.append({
+            'symbol': quote['symbol'],
+            'price': quote['regularMarketPrice'],
+            'previous_close': quote['regularMarketPreviousClose'],
+            'trailing_pe': quote.get('trailingPE', '?'),
+            'forward_pe': quote.get('forwardPE', '?'), 
+            'market_cap': quote.get('marketCap', '?'),
+            '52_week_high': quote.get('fiftyTwoWeekHigh', '?'),
+            '52_week_low': quote.get('fiftyTwoWeekLow', '?'),
+        })
+
+    return quotes
