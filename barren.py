@@ -224,9 +224,9 @@ async def check(ctx):
         stock_quantity = portfolio_data[quote['symbol']]['quantity']
 
         response = f" {stock_quantity}x {quote['symbol']}: ${stock_avg_cost} -> ${stock_current_price}\n"
-        response += f"equity:   ${stock_quantity * stock_avg_cost} -> ${stock_quantity * stock_current_price} = ${stock_quantity * (stock_current_price - stock_avg_cost)}\n"
+        response += f"equity:   ${(stock_quantity * stock_avg_cost):.2f} -> ${(stock_quantity * stock_current_price):.2f} = ${(stock_quantity * (stock_current_price - stock_avg_cost)):.2f}\n"
         response += f"PE: {quote['trailing_pe']} -> {quote['forward_pe']}\n"
-        response += f"Market Cap: ${quote['market_cap']:,.2f}\n"
+        response += f"Market Cap: ${quote['market_cap']:,.2f}\n" if quote['market_cap'] != '?' else f"Market Cap: {quote['market_cap']}\n"
         response += f"52W low/high: {quote['52_week_low']} , {quote['52_week_high']}\n"
         response += f"-----------------------------------\n"
         await ctx.send(response)
