@@ -1,277 +1,23 @@
-import requests
 import discord
 from discord.ext import commands,tasks
+import csv
 import datetime
 import pytz
 from dotenv import load_dotenv
 import os
+from api_funcs import (
+    get_trending_tickers, 
+    get_market_movers, 
+    get_real_time_gainers, 
+    get_real_time_losers, 
+    get_news, 
+    get_sa_articles, 
+    get_analysis
+)
 
 load_dotenv()
-RAPIDAPI_KEY = os.getenv('RAPIDAPI_KEY')
+# RAPIDAPI_KEY = os.getenv('RAPIDAPI_KEY')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
-
-def get_market_movers():
-    url = "https://apidojo-yahoo-finance-v1.p.rapidapi.com/market/v2/get-movers"
-    
-    querystring = {
-        "region": "US",
-        "lang": "en-US", 
-        "start": "0",
-        "count": "6"
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json()
-
-    results = data['finance']['result']
-    market_movers = {}
-
-    for category in results:
-        category_name = category['canonicalName']  # e.g., 'DAY_GAINERS'
-        stocks = []
-        
-        for quote in category['quotes']:
-            stocks.append({
-                'symbol': quote['symbol'],
-                'price': quote['regularMarketPrice'],
-                'exchange': quote['fullExchangeName']
-            })
-            
-        market_movers[category_name] = stocks
-    
-    return market_movers
-
-def get_trending_tickers():
-    url = "https://apidojo-yahoo-finance-v1.p.rapidapi.com/market/get-trending-tickers"
-    
-    querystring = {
-        "region": "US",
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json()
-
-    results = data['finance']['result'][0]['quotes']
-    trending_tickers = []
-    for quote in results:
-        if 'longName' not in quote:
-            continue
-        trending_tickers.append({
-            'name': quote['longName'] ,
-            'symbol': quote['symbol'],
-            'price': quote['regularMarketPrice'],
-            'exchange': quote['fullExchangeName'],
-            'previous_close': quote['regularMarketPreviousClose'],
-            'price_change': quote['regularMarketChange'],
-            'percent_change': quote['regularMarketChangePercent']
-        })
-
-    return trending_tickers
-
-def get_news():
-    url = "https://apidojo-yahoo-finance-v1.p.rapidapi.com/news/v2/list"
-    
-    querystring = {
-        "region": "US",
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "apidojo-yahoo-finance-v1.p.rapidapi.com"
-    }
-
-    response = requests.post(url, headers=headers, params=querystring)
-    data = response.json()
-
-    #print(data)
-    results= data['data']['main']['stream']
-    news_articles = []
-
-    for article in results:
-        news_articles.append({
-            'id': article['content']['id'],
-            'title': article['content']['title'],
-            'content_type': article['content']['contentType'],
-            'date_published': article['content']['pubDate'],
-            'preview_url': article['content']['previewUrl'],
-            'provider': article['content']['provider']['displayName'],
-            'relevant_tickers': article['content']['finance']['stockTickers']
-        })
-
-    return news_articles
-
-def get_sa_articles():
-    url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-
-    querystring = {
-        "category": "latest-articles",
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "seeking-alpha.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json()
-
-    results = data['data']
-    sa_articles = []
-
-    for article in results:
-        sa_articles.append({
-            'id': article['id'],
-            'title': article['attributes']['title'],
-            'date_published': article['attributes']['publishOn'],
-            'structuredInsights': article['attributes']['structuredInsights'],
-        })
-    return sa_articles
-
-def get_analysis(id):
-    url = "https://seeking-alpha.p.rapidapi.com/analysis/v2/list"
-
-    querystring = {
-        "id": id,
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "seeking-alpha.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json()
-
-    analysis = []
-
-    results = data['data']
-    if len(results) == 0:
-        return None
-    
-    for result in results:
-        if 'type' not in result or result['type'] != 'article':
-            continue
-        if 'attributes' not in result or 'structuredInsights' not in result['attributes']:
-            continue
-        analysis.append({
-            'id': result['id'],
-            'title': result['attributes']['title'],
-            'date_published': result['attributes']['publishOn'],
-            'structuredInsights': result['attributes']['structuredInsights'],
-        })
-
-    return analysis
-
-def get_real_time_gainers():
-    url = "https://real-time-finance-data.p.rapidapi.com/market-trends"
-
-    querystring = {
-        "trend_type": "GAINERS",
-        "country": "US",
-        "language": "en",
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "real-time-finance-data.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json()
-
-    results = data['data']['trends']
-    news_results = data['data']['news']
-    real_time_gainers = []
-    gainers_news = []
-
-    for ticker in results:
-        real_time_gainers.append({
-            'symbol': ticker['symbol'],
-            'name': ticker['name'],
-            'price': ticker['price'],
-            'previous_close': ticker['previous_close'],
-            'change': ticker['change'],
-            'change_percent': ticker['change_percent'],
-            # 'closed_market_price': ticker['pre_or_post_market'],
-            'last_updated': ticker['last_update_utc'],
-        })
-    for news in news_results:
-        gainers_news.append({
-            'title': news['article_title'],
-            'url': news['article_url'],
-            'published_at': news['post_time_utc'],
-            'stocks': news['stocks_in_news'],
-        })
-
-    return real_time_gainers, gainers_news
-
-def get_real_time_losers():
-    url = "https://real-time-finance-data.p.rapidapi.com/market-trends"
-
-    querystring = {
-        "trend_type": "LOSERS",
-        "country": "US",
-        "language": "en",
-    }
-
-    headers = {
-        "Accept": "application/json",
-        "x-rapidapi-ua": "RapidAPI-Playground",
-        "x-rapidapi-key": RAPIDAPI_KEY,
-        "x-rapidapi-host": "real-time-finance-data.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-    data = response.json()
-
-    results = data['data']['trends']
-    news_results = data['data']['news']
-    real_time_losers = []
-    losers_news = []
-
-    for ticker in results:
-        real_time_losers.append({
-            'symbol': ticker['symbol'],
-            'name': ticker['name'],
-            'price': ticker['price'],
-            'previous_close': ticker['previous_close'],
-            'change': ticker['change'],
-            'change_percent': ticker['change_percent'],
-            # 'closed_market_price': ticker['pre_or_post_market'],
-            'last_updated': ticker['last_update_utc'],
-        })
-    for news in news_results:
-        losers_news.append({
-            'title': news['article_title'],
-            'url': news['article_url'],
-            'published_at': news['post_time_utc'],
-            'stocks': news['stocks_in_news'],
-        })
-
-    return real_time_losers, losers_news
-
 
 
 intents = discord.Intents.default()
@@ -323,6 +69,135 @@ async def analyze(ctx,*, ticker_id):
                 analysis_msg += f"  {article['structuredInsights']}\n"
             await ctx.send(analysis_msg[:1995])
 
+
+@bot.command(name='add')
+async def add(ctx, ticker_id=None, avg_cost=None, quantity=None):
+    # Check if all parameters are provided
+    print(ticker_id, avg_cost, quantity)
+    if ticker_id is None or avg_cost is None or quantity is None:
+        await ctx.send("Please provide all required parameters: ticker_id, avg_cost, and quantity")
+        return
+
+    # Validate and convert values
+    try:
+        ticker_id = ticker_id.strip().upper()
+        if not ticker_id:
+            await ctx.send("Ticker ID cannot be empty")
+            return
+            
+        avg_cost = float(avg_cost)
+        if avg_cost <= 0:
+            await ctx.send("Average cost must be greater than 0")
+            return
+
+        quantity = int(quantity)
+        if quantity <= 0:
+            await ctx.send("Quantity must be greater than 0")
+            return
+
+    except ValueError:
+        await ctx.send("Invalid values provided. Please check the format and try again")
+        return
+
+    # Add to CSV file
+    try:
+        with open('portfolio.csv', 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow([ticker_id, avg_cost, quantity])
+        await ctx.send(f"Successfully added {quantity} shares of {ticker_id} at ${avg_cost:.2f} per share")
+    except IOError:
+        await ctx.send("Error writing to portfolio file")
+        return
+
+@bot.command(name='mod')
+async def mod(ctx, ticker_id=None, mod_type=None, value=None):
+    # Check if all parameters are provided
+    if ticker_id is None or mod_type is None or value is None:
+        await ctx.send("Please provide all required parameters: ticker_id mod_type value")
+        return
+
+    # Validate inputs
+    ticker_id = ticker_id.strip().upper()
+    mod_type = mod_type.lower()
+    
+    # Verify mod_type is valid
+    if mod_type not in ['cost', 'quant']:
+        await ctx.send("mod_type must be either 'cost' or 'quant'")
+        return
+
+    # Validate and convert value
+    try:
+        value = float(value) if mod_type == 'cost' else int(value)
+        if value <= 0:
+            await ctx.send(f"Value must be greater than 0")
+            return
+    except ValueError:
+        await ctx.send(f"Invalid value provided. Please provide a {'number' if mod_type == 'cost' else 'whole number'}")
+        return
+
+    # Read and modify the CSV file
+    found = False
+    updated_rows = []
+    try:
+        with open('portfolio.csv', 'r', newline='') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                if row[0] == ticker_id:
+                    found = True
+                    # Modify either cost (index 1) or quantity (index 2)
+                    row[1 if mod_type == 'cost' else 2] = value
+                updated_rows.append(row)
+
+        if not found:
+            await ctx.send(f"Ticker {ticker_id} not found in portfolio")
+            return
+
+        # Write back to CSV
+        with open('portfolio.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(updated_rows)
+
+        await ctx.send(f"Successfully updated {ticker_id}'s {mod_type} to {value}")
+
+    except IOError:
+        await ctx.send("Error accessing portfolio file")
+        return
+
+@bot.command(name='remove')
+async def remove(ctx, ticker_id=None):
+    # Check if ticker_id is provided
+    if ticker_id is None:
+        await ctx.send("Please provide a ticker_id to delete")
+        return
+
+    ticker_id = ticker_id.strip().upper()
+    found = False
+    updated_rows = []
+
+    try:
+        # Read the CSV and filter out the matching ticker
+        with open('portfolio.csv', 'r', newline='') as file:
+            reader = csv.reader(file)
+            for row in reader:
+                if row[0] == ticker_id:
+                    found = True
+                else:
+                    updated_rows.append(row)
+
+        if not found:
+            await ctx.send(f"Ticker {ticker_id} not found in portfolio")
+            return
+
+        # Write back the filtered rows
+        with open('portfolio.csv', 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(updated_rows)
+
+        await ctx.send(f"Successfully deleted {ticker_id} from portfolio")
+
+    except IOError:
+        await ctx.send("Error accessing portfolio file")
+        return
 
 @tasks.loop(time=datetime.time(hour=4,tzinfo=pytz.timezone('US/Eastern')) )
 async def daily_update():

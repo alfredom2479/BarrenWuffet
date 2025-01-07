@@ -9,3 +9,4 @@ venv
 .venv
 .env.*
 .out.*
+portfolio.csv
